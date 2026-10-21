@@ -1,0 +1,118 @@
+name: aftercare
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: '5'}
+x-app-env: &app-env
+  APP_ENV: production
+  DATABASE_URL: postgresql+psycopg://aftercare_app:${APP_DB_PASSWORD:?Generate deployment secrets}@postgres:5432/aftercare
+  PUBLIC_ORIGIN: https://${SITE_DOMAIN:?Set a domain}
+  DEMO_MODE: 'false'
+  COOKIE_SECURE: 'true'
+  STORAGE_BACKEND: s3
+  S3_BUCKET: ${S3_BUCKET:?Configure a private bucket}
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Configure S3 credentials}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Configure S3 credentials}
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+  REDIS_URL: redis://:${REDIS_PASSWORD:?Generate deployment secrets}@redis:6379/0
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  KUAIDI100_CUSTOMER: ${KUAIDI100_CUSTOMER:-}
+  KUAIDI100_KEY: ${KUAIDI100_KEY:-}
+  KUAIDI100_KEY_FILE: ${KUAIDI100_KEY_FILE:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_INPUT_USD_PER_MILLION: ${LLM_INPUT_USD_PER_MILLION:-0}
+  LLM_OUTPUT_USD_PER_MILLION: ${LLM_OUTPUT_USD_PER_MILLION:-0}
+  LLM_MAX_CALLS: '12'
+  LLM_BUDGET_MICROUSD: ${LLM_BUDGET_MICROUSD:-1000000}
+  LLM_TENANT_DAILY_BUDGET_MICROUSD: ${LLM_TENANT_DAILY_BUDGET_MICROUSD:-10000000}
+  LLM_TOTAL_BUDGET_MICROUSD: ${LLM_TOTAL_BUDGET_MICROUSD:-0}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  FEISHU_INTAKE_TOKEN: ${FEISHU_INTAKE_TOKEN:-}
+  FEISHU_TENANT_ID: ${FEISHU_TENANT_ID:-}
+  FEISHU_OWNER_ID: ${FEISHU_OWNER_ID:-}
+  FEISHU_BASE_ID: ${FEISHU_BASE_ID:-}
+  FEISHU_TABLE_ID: ${FEISHU_TABLE_ID:-}
+x-app: &app
+  image: aftercare-backend:${APP_VERSION:-local}
+  build: {context: .., dockerfile: backend/Dockerfile}
+  environment: *app-env
+  init: true
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging: *logging
+  restart: unless-stopped
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:18-bookworm}
+    environment:
+      POSTGRES_DB: aftercare
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate deployment secrets}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Generate deployment secrets}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./postgres/init-app.sh:/docker-entrypoint-initdb.d/10-aftercare.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d aftercare']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: *logging
+    restart: unless-stopped
+  redis:
+    image: ${REDIS_IMAGE:-redis:8-alpine}
+    environment: {REDIS_PASSWORD: '${REDIS_PASSWORD:?Generate deployment secrets}'}
+    command: [/bin/sh, -c, 'exec redis-server --requirepass "$${REDIS_PASSWORD}" --save "" --appendonly no']
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+    restart: unless-stopped
+  migrate:
+    <<: *app
+    restart: 'no'
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?Generate deployment secrets}@postgres:5432/aftercare
+    command: [python, -m, app.release]
+    depends_on: {postgres: {condition: service_healthy}}
+  api:
+    <<: *app
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health/ready",timeout=3)']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  worker:
+    <<: *app
+    command: [celery, -A, app.celery_app:celery, worker, --loglevel=INFO, --concurrency=2]
+    depends_on:
+      api: {condition: service_healthy}
+  scheduler:
+    <<: *app
+    command: [celery, -A, app.celery_app:celery, beat, --loglevel=INFO, --schedule=/tmp/celerybeat-schedule]
+    depends_on:
+      api: {condition: service_healthy}
+  web:
+    image: aftercare-web:${APP_VERSION:-local}
+    build: {context: .., dockerfile: frontend/Dockerfile}
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Set a domain}
+      TLS_EMAIL: ${TLS_EMAIL:?Set certificate contact}
+    ports: ['80:80','443:443']
+    volumes: [caddy-data:/data,caddy-config:/config]
+    depends_on: {api: {condition: service_healthy}}
+    logging: *logging
+    restart: unless-stopped
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

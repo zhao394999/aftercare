@@ -1,0 +1,71 @@
+name: Aftercare quality gates
+on: [push, pull_request, workflow_dispatch]
+permissions: {contents: read}
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-bookworm
+        env: {POSTGRES_PASSWORD: ci-owner-only, POSTGRES_DB: aftercare}
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres -d aftercare" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.14'}
+      - run: pip install -r backend/requirements-dev.in
+      - name: Critical static checks
+        run: ruff check backend/app backend/tests backend/integration --select E9,F63,F7,F82 --no-cache
+      - name: Unit and domain boundary checks
+        run: PYTHONPATH=backend pytest backend/tests -q
+      - name: Prepare non-owner PostgreSQL runtime role
+        env: {PYTHONPATH: backend, DATABASE_URL: 'postgresql+psycopg://postgres:ci-owner-only@127.0.0.1:5432/aftercare'}
+        run: |
+          python - <<'PY'
+          from sqlalchemy import text
+          from app.database import engine
+          with engine.begin() as db:
+              db.execute(text("CREATE ROLE aftercare_app LOGIN PASSWORD 'ci-app-only' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE"))
+              db.execute(text('REVOKE CREATE ON SCHEMA public FROM PUBLIC'))
+              db.execute(text('GRANT USAGE ON SCHEMA public TO aftercare_app'))
+          PY
+          python -m app.release
+      - name: RLS, real row locks and duplicate delivery
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: postgresql+psycopg://aftercare_app:ci-app-only@127.0.0.1:5432/aftercare
+          APP_ENV: development
+        run: pytest backend/integration -q
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: frontend}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '26', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+  container-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose without printing secrets
+        env:
+          SITE_DOMAIN: example.com
+          TLS_EMAIL: ops@example.com
+          POSTGRES_PASSWORD: fixture-only
+          APP_DB_PASSWORD: fixture-only
+          REDIS_PASSWORD: fixture-only
+          S3_BUCKET: fixture
+          AWS_ACCESS_KEY_ID: fixture-only
+          AWS_SECRET_ACCESS_KEY: fixture-only
+        run: docker compose -f deployment/compose.yaml config -q
+      - name: Validate Caddy configuration
+        run: docker run --rm -e SITE_DOMAIN=example.com -e TLS_EMAIL=ops@example.com -v "$PWD/deployment/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - name: Build application images and smoke-test isolated PDF parsing
+        run: |
+          docker build -f backend/Dockerfile -t aftercare-backend:ci .
+          docker build -f frontend/Dockerfile -t aftercare-web:ci .
+          docker run --rm --read-only --tmpfs /tmp --memory=2g -e DATABASE_URL=postgresql+psycopg://fixture:fixture@localhost/fixture aftercare-backend:ci python -c "import io; from app.main import app; from app.storage import validate_file; from pypdf import PdfWriter; w=PdfWriter(); w.add_blank_page(width=100,height=100); b=io.BytesIO(); w.write(b); assert validate_file(b.getvalue(),'fixture.pdf')[0]=='application/pdf'"

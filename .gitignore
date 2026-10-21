@@ -1,0 +1,39 @@
+# Dependencies and build output
+.venv/
+node_modules
+dist/
+*.tsbuildinfo
+# Credentials: only empty examples may be committed
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+# Business data, backups, synthetic datasets and local reports
+runtime/
+samples/
+evals/
+deliverables/
+design-preview/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.dump
+*.bak
+*.zip
+# Local caches and logs
+.cache/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.log
+.coverage
+.DS_Store
