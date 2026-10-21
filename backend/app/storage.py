@@ -96,7 +96,7 @@ def s3_client():
         "s3",
         endpoint_url=settings().s3_endpoint or None,
         config=Config(connect_timeout=5, read_timeout=5, retries={"max_attempts": 1},
-                      s3={"addressing_style": "path"} if settings().s3_endpoint else {}),
+                      s3={"addressing_style": settings().s3_addressing_style} if settings().s3_endpoint else {}),
     )
 
 

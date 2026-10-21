@@ -58,3 +58,5 @@ npm run build --prefix frontend
 测试中的账户、订单和模型响应仅用于隔离验证，不是预置业务数据，也不代表真实客户效果。PostgreSQL / S3 集成测试需要单独配置对应的隔离服务。
 
 正式部署请阅读 [部署手册](deployment/README.md)。
+
+作品集云端试用准备见 [Railway 部署说明](deployment/RAILWAY.md)，使用后端私有密钥与空白业务库；实际部署状态以平台与上线验收记录为准。
