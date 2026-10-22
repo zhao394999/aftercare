@@ -59,4 +59,4 @@ npm run build --prefix frontend
 
 正式部署请阅读 [部署手册](deployment/README.md)。
 
-作品集云端试用准备见 [Railway 部署说明](deployment/RAILWAY.md)，使用后端私有密钥与空白业务库；实际部署状态以平台与上线验收记录为准。
+免费作品集部署见 [Render + Supabase 部署说明](deployment/RENDER.md)，使用后端私有密钥与空白业务库；实际部署状态以平台与上线验收记录为准。历史方案见 [Railway 部署说明](deployment/RAILWAY.md)。

@@ -72,4 +72,5 @@ jobs:
           docker build -f frontend/Dockerfile -t aftercare-web:ci .
           docker build -f frontend/Dockerfile.railway -t aftercare-railway-web:ci .
           docker build -f deployment/postgres/Dockerfile -t aftercare-postgres:ci .
+          docker build -f deployment/Dockerfile.render -t aftercare-render:ci .
           docker run --rm --read-only --tmpfs /tmp --memory=2g -e DATABASE_URL=postgresql+psycopg://fixture:fixture@localhost/fixture aftercare-backend:ci python -c "import io; from app.main import app; from app.storage import validate_file; from pypdf import PdfWriter; w=PdfWriter(); w.add_blank_page(width=100,height=100); b=io.BytesIO(); w.write(b); assert validate_file(b.getvalue(),'fixture.pdf')[0]=='application/pdf'"
