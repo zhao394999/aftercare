@@ -24,6 +24,7 @@
 APP_ENV=production
 DEMO_MODE=false
 COOKIE_SECURE=true
+PUBLIC_ORIGIN=https://YOUR_SERVICE.onrender.com
 DATABASE_URL=postgresql+psycopg://aftercare_app.PROJECT_REF:PRIVATE_PASSWORD@SESSION_POOLER_HOST:5432/postgres?sslmode=require
 STORAGE_BACKEND=s3
 S3_BUCKET=aftercare-files
@@ -47,5 +48,9 @@ LLM_TOTAL_BUDGET_MICROUSD=1000000
 ## 验收与额度
 
 检查网页、`/health/ready`、`/health/workers`，注册后确认订单、工单、政策和知识库为空；验证模型可用及私有附件上传/下载。检查网页构建、API 响应、日志与 Git 历史中没有密钥。云端真实验证用完应清理验收内容，不预置业务案例。
+
+可临时将 Docker Command 设为 `python deployment/check_storage.py`，验证私有附件上传、读取和删除；日志出现 `PRIVATE_STORAGE_ROUND_TRIP_PASSED` 后恢复空白命令，使用镜像默认启动。该检查需要上述完整生产环境变量，不创建订单或客户资料。
+
+由公开 Git 仓库地址创建的服务需要在 Render 部署最新提交；连接 GitHub 仓库后可启用自动部署。先确认最新提交的 GitHub Actions 检查通过，再部署。
 
 Render Free 空闲约 15 分钟后休眠，再次访问需要冷启动；同实例任务随休眠暂停，活跃演示时恢复处理。数据库和附件保留在 Supabase。免费额度、暂停及保留政策以平台当前条款为准。不绑付费资源，不开启超额付费；DeepSeek 调用仍使用供应商余额，部署总预算设置为 1 美元，到达预算后停止新增模型调用。
