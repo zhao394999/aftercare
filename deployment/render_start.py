@@ -43,6 +43,8 @@ def main():
         "PATH": os.defpath,
         "PORT": environment.get("PORT", "10000"),
         "API_UPSTREAM": "127.0.0.1:8000",
+        "XDG_CONFIG_HOME": "/tmp/caddy-config",
+        "XDG_DATA_HOME": "/tmp/caddy-data",
     }
     return supervise([
         ([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--workers", "1", "--no-access-log"], environment),

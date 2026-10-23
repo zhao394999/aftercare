@@ -24,7 +24,9 @@ def test_frontend_never_receives_secrets(monkeypatch):
     assert render_start.main() == 0
     assert captured[0][1]["PUBLIC_ORIGIN"] == "https://aftercare.example.test"
     assert captured[1][1]["LLM_API_KEY"] == "backend-only"
-    assert set(captured[2][1]) == {"PATH", "PORT", "API_UPSTREAM"}
+    assert set(captured[2][1]) == {
+        "PATH", "PORT", "API_UPSTREAM", "XDG_CONFIG_HOME", "XDG_DATA_HOME"
+    }
 
 
 def test_child_failure_and_shutdown_stop_other_processes(tmp_path):
