@@ -19,6 +19,7 @@ COPY --from=frontend /build/dist /srv
 COPY backend backend
 COPY deployment/Caddyfile.railway /etc/caddy/Caddyfile
 COPY deployment/render_start.py deployment/render_start.py
+COPY deployment/check_storage.py deployment/check_storage.py
 USER 10001:10001
 EXPOSE 10000
 CMD ["python", "deployment/render_start.py"]
