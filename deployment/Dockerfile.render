@@ -12,7 +12,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app/backend
 WORKDIR /app
 COPY backend/requirements.lock backend/requirements.lock
 RUN pip install --no-cache-dir -r backend/requirements.lock && groupadd --gid 10001 aftercare && useradd --uid 10001 --gid aftercare --no-create-home aftercare
-COPY --from=edge /usr/bin/caddy /usr/bin/caddy
+COPY --from=edge /usr/bin/caddy /tmp/caddy
+# Render blocks file capabilities; this service only binds unprivileged ports.
+RUN install -m 0755 /tmp/caddy /usr/bin/caddy && rm /tmp/caddy
 COPY --from=frontend /build/dist /srv
 COPY backend backend
 COPY deployment/Caddyfile.railway /etc/caddy/Caddyfile
